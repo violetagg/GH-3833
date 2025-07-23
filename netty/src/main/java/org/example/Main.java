@@ -6,6 +6,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.epoll.EpollIoHandler;
@@ -14,8 +15,8 @@ import io.netty.channel.socket.SocketChannel;
 //import io.netty.channel.uring.IoUringIoHandler;
 //import io.netty.channel.uring.IoUringServerSocketChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.util.AsciiString;
 import io.netty.util.CharsetUtil;
@@ -26,6 +27,7 @@ import java.net.InetSocketAddress;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static io.netty.handler.codec.http.LastHttpContent.EMPTY_LAST_CONTENT;
 
 public class Main {
 	static final byte[] STATIC_PLAINTEXT = "Hello, World!".getBytes(CharsetUtil.UTF_8);
@@ -45,10 +47,11 @@ public class Main {
 					.channel(EpollServerSocketChannel.class);
 
 			//IO_Uring
-			//b.group(new MultiThreadIoEventLoopGroup(IoUringIoHandler.newFactory()))
+			//b.group(group)
 			//		.channel(IoUringServerSocketChannel.class);
 
-			b.childHandler(new HelloWorldServerInitializer());
+			b.childOption(ChannelOption.AUTO_READ, false)
+					.childHandler(new HelloWorldServerInitializer());
 
 			Channel ch = b.bind(new InetSocketAddress(8080)).sync().channel();
 			ch.closeFuture().sync();
@@ -71,10 +74,15 @@ public class Main {
 		@Override
 		public void channelRead(ChannelHandlerContext ctx, Object msg) {
 			try {
-				if (msg instanceof HttpRequest) {
+				if (msg.getClass() == DefaultHttpRequest.class) {
+					ctx.channel().config().setAutoRead(false);
 					FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.wrappedBuffer(STATIC_PLAINTEXT));
 					response.headers().set(CONTENT_LENGTH, PLAINTEXT_CL_HEADER_VALUE);
-					ctx.write(response);
+					ctx.channel().writeAndFlush(response);
+					ctx.read();
+				}
+				else if (msg == EMPTY_LAST_CONTENT) {
+					ctx.channel().config().setAutoRead(true);
 				}
 			}
 			finally {
@@ -83,13 +91,14 @@ public class Main {
 		}
 
 		@Override
-		public void channelReadComplete(ChannelHandlerContext ctx) {
-			ctx.flush();
+		public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+			ctx.close();
 		}
 
 		@Override
-		public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-			ctx.close();
+		public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+			super.handlerAdded(ctx);
+			ctx.read();
 		}
 	}
 }
