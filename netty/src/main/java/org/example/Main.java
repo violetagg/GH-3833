@@ -18,6 +18,8 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpServerCodec;
+//import io.netty.incubator.channel.uring.IOUringEventLoopGroup;
+//import io.netty.incubator.channel.uring.IOUringServerSocketChannel;
 import io.netty.util.AsciiString;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
@@ -37,8 +39,10 @@ public class Main {
 	public static void main(String[] args) throws Exception {
 		// Epoll
 		EventLoopGroup group = new MultiThreadIoEventLoopGroup(EpollIoHandler.newFactory());
-		//IO_Uring
+		// IO_Uring
 		//EventLoopGroup group = new MultiThreadIoEventLoopGroup(IoUringIoHandler.newFactory());
+		// IO_Uring incubator
+		//EventLoopGroup group = new IOUringEventLoopGroup();
 		try {
 			ServerBootstrap b = new ServerBootstrap();
 
@@ -49,6 +53,10 @@ public class Main {
 			//IO_Uring
 			//b.group(group)
 			//		.channel(IoUringServerSocketChannel.class);
+
+			// IO_Uring incubator
+			//b.group(group)
+			//		.channel(IOUringServerSocketChannel.class);
 
 			b.childOption(ChannelOption.AUTO_READ, false)
 					.childHandler(new HelloWorldServerInitializer());
